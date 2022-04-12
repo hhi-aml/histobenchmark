@@ -20,10 +20,10 @@ quality according to complementary requirements that can be
 transferred to future model architectures.
 
 
-Our paper can be found [here](https://arxiv.org/abs/2204.xxxxx). 
+Our paper can be found [here](https://arxiv.org/abs/2204.05044). 
 Please cite our work, when using this code:
 ```
-arxiv:2204.xxxxx
+arXiv:2204.05044
 ```
 
 # Table of Contents
