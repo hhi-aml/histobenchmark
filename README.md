@@ -43,7 +43,7 @@ arXiv:2204.05044
 
 ## Quantitative Evaluation
 
-<p align="center"><img src="imgs/GFLROPS_Acc.png" width="500"></p>
+<p align="center"><img src="imgs/GFLROPS_Acc.jpg" width="500"></p>
 
 ### Training a Model
 
