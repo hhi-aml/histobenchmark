@@ -642,43 +642,29 @@ class RAP_LRP:
 
 class AttentionMap:
     DEFAULT_APPLIES = {
-        'vit': lambda m, x, shape_P: m.attention_map(x, shape_P=shape_P),
-        'vit_C': lambda m, x, shape_P: m.transformer.attention_map(m.stem(x), shape_P=shape_P)
+        'vit': lambda m, x, P, S_in, interpolation: m.get_attn_maps(x, P=P, S_in=S_in, interpolation=interpolation),
     }
 
-    def __init__(self, model, f_model_apply='vit', shape_P=None, n_head=-1):
+    def __init__(self, model, f_model_apply='vit', P=16, S_in=224, interpolation='bicubic', n_head=-1):
         self.model = model.model
         self.type_model = f_model_apply
+        print(f_model_apply)
         if not f_model_apply in self.DEFAULT_APPLIES.keys():
             assert isinstance(f_model_apply, Callable), 'submit a function or arch of the ViT'
             self.f_model_apply = f_model_apply
         else:
             self.f_model_apply = self.DEFAULT_APPLIES[f_model_apply]
-        self.shape_P = shape_P
+        self.P = P
+        self.S_in = S_in
+        self.interpolation = interpolation
         self.n_head = n_head
 
     def __call__(self, x_in, y_class=None):
         self.model.eval()
-        # keeping track of the input shape, to scale attention maps (ViT_C)
-        in_shape = x_in.shape[-2:]
-        # TODO: outsource ViT_C input sanity to the Conv Stem
-        # input sanity: the conv Stem expects 128x128 to produce 4x4 patches
-        if self.type_model == 'vit_C':
-            self.shape_P = (4, 4)
-            x_in = transforms.functional.resize(x_in, (128, 128))
         # attention maps are not reliant on gradients or backprop-hooks => speeding up the inference with no_grad environment
-        #with torch.no_grad():
-        amap = self.f_model_apply(self.model, x_in, self.shape_P)
-        cls_attn = amap[:, :, -1, :-1]
-        new_shape = tuple(map(int, [*cls_attn.shape[:2], *(np.array(x_in.shape[-2:])/np.array(self.shape_P[-2:]))]))
-        hm = cls_attn.reshape(new_shape)
-        hm = hm[:, self.n_head, :, :][:,None,:,:]
-        # print('new shape', new_shape)
-        # print('hm shape', hm.shape)
-        # print('P shape', self.shape_P)
-        hm = F.interpolate(hm, scale_factor=self.shape_P[-2:], mode="bicubic")
-        # ensuring that the output and input dimensions match
-        hm = transforms.functional.resize(hm, in_shape)
+        with torch.no_grad():
+            amap = self.f_model_apply(self.model, x_in, self.P, self.S_in, self.interpolation)
+        hm = amap[:, self.n_head, :, :][:,None,:,:]
         # cpu/ numpy array output for memory efficiency
         hm = hm.detach().cpu().numpy()
         return hm
@@ -753,7 +739,7 @@ def get_f_xai(hparams, model):
     elif hparams.xai_method == 'Occlusion':
         f_xai = Occlusion(model)
     elif hparams.xai_method == 'Attention':
-        f_xai = AttentionMap(model, f_model_apply=hparams.arch, shape_P=(3, hparams.patch_size, hparams.patch_size), n_head=hparams.n_head)
+        f_xai = AttentionMap(model, f_model_apply='vit', n_head=hparams.n_head)
     else:
         raise NotImplementedError(f'Unsupported method {hparams.xai_method}, plese choose from (IntGrad, IntGradNoiseTunnel)')
     return f_xai
@@ -882,6 +868,8 @@ def validate(h_maps, masks, masks_bg, masks_tissue):
             #rank_accs[i].append(rank_accuracy(R, F))
             # storing K-parameter
             Ks[i].append(F.sum()/np.prod(F.shape))
+            if np.isnan(F).sum() > 0 or np.isnan(R).sum() > 0 or np.isinf(F).sum() > 0 or np.isinf(R).sum() > 0:
+                continue
             # mass accuarcy
             weighted_rels[i].append(mass_accuracy(R, F))
             # pearson metrices
@@ -944,8 +932,8 @@ if __name__ == '__main__':
     else:
         head_to_data = []
         output_dir = hparams.output_path
-        for i in range(hparams.n_heads):
-            print(f'head {i+1}/{hparams.n_heads}')
+        for i in range(model.model.num_heads):
+            print(f'head {i+1}/{model.model.num_heads}')
             hparams.n_head = i
             hparams.output_path = os.path.join(output_dir, f'head_{"0" * (len(str(hparams.n_heads)) - len(str(i+1)))}{i+1}')
             # initialize the XAI method
@@ -967,7 +955,7 @@ if __name__ == '__main__':
 
     # apply semantic enrichment
     (masks, masks_bg, masks_tissue) = get_seg_masks(model_nuclei=model_cells, model_bg=model_bg, model_tissue=model_tissue,
-                                                               max_samples=hparams.max_samples, resize=hparams.seg_size) #model.image_size(hparams))
+                                                    max_samples=hparams.max_samples, resize=hparams.seg_size) #model.image_size(hparams))
 
     # calculate the metrics
     # r_top_K = float(integrated_top_K(h_maps, masks).mean())

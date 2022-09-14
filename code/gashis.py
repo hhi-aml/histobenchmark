@@ -15,6 +15,7 @@ from pytorch_LRP.transformer import vit
 from einops import rearrange
 from torchvision import transforms
 import numpy as np
+import timm_models #timm.models as timm_models
 
 
 class expand_dim(nn.Module):
@@ -379,9 +380,9 @@ class BoTStack(nn.Module):
 
 class BotNet50(nn.Module):
 
-    def __init__(self, n_classes=None, size_in=299, final_act=False):
+    def __init__(self, n_classes=None, size_in=299, final_act=False, pretrained=True):
         super().__init__()
-        resnet = resnet50()
+        resnet = timm_models.resnet50(pretrained=pretrained)#resnet50()
         self.conv = Sequential(*list(resnet.children())[:-3])
         self.mhsa = BoTStack(
             dim=1024, 
@@ -407,9 +408,13 @@ class BotNet50(nn.Module):
     def relprop(self, R, alpha=None):
         if self.head is not None:
             R = self.head.relprop(R, alpha=alpha)
+        R /= R.sum()
         R = self.final_pool.relprop(R, alpha=alpha)
+        R /= R.sum()
         R = self.mhsa.relprop(R, alpha=alpha)
+        R /= R.sum()
         R = self.conv.relprop(R, alpha=alpha)
+        R /= R.sum()
         return R
 
 
@@ -441,9 +446,11 @@ class GasHisTransformer(nn.Module):
     def __init__(self, hparams, gim=None, lim=None, final_act=False, dropout_gim=True, dropout_lim=True):
         super().__init__()
         if gim is None:
-            gim = BotNet50(size_in=299)
+            gim = BotNet50(size_in=299, pretrained=hparams.use_pt_weights)
         if lim is None:
-            lim = Inception()
+            lim = timm_models.inception_v3(num_classes=hparams.num_classes, pretrained=hparams.use_pt_weights)#Inception()
+            lim.fc = Identity()
+            lim.f_out = 2048
         self.hparams = hparams
         self.f_GIM = gim
         self.f_LIM = lim

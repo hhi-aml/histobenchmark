@@ -15,6 +15,7 @@ import argparse
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 import copy
+from copy import deepcopy
 
 #################
 #specific
@@ -28,6 +29,8 @@ import numpy as np
 import gashis
 from utils.transformer import *
 from utils.schedulers import *
+import timm_models as timm_models2
+import timm.models as timm_models
 
 from pytorch_LRP.transformer import vit
 from pytorch_LRP import vgg as rap_vgg
@@ -35,6 +38,7 @@ from pytorch_LRP import resnet as rap_resnet
 from pytorch_LRP import layers as rap_layers
 from utils.dataloader import *
 from utils import bootstrap_utils
+import hybrid
 from sklearn.metrics import roc_auc_score, roc_curve, auc
 import numpy as np
 import math
@@ -220,7 +224,7 @@ class PathoLightning(pl.LightningModule):
         # model selection
         val_auc = results_val[-1]
         if self.model_selection and self.best_val_auc < val_auc:
-            self.best_state_dict = self.state_dict()
+            self.best_state_dict = deepcopy(self.state_dict())
             self.best_val_auc = val_auc
             print(f'{OKGREEN}new best model{ENDC}')
 
@@ -279,7 +283,7 @@ class PathoLightning(pl.LightningModule):
         # if we use inception v3, images aught to be at least 299x299
         if hparams.arch in ['gashis', 'inception_v3', 'gashisResNet']:
             t_shape = [299, 299]
-        elif hparams.arch == 'vit':
+        elif hparams.arch[:3].lower() == 'vit' or hparams.arch[:4].lower() == 'swin' or hparams.arch[:8].lower() == 'convnext':
             t_shape = [224, 224]
         elif hparams.arch in ['vit_C', 'gashisViTC']:
             t_shape = [128, 128]
@@ -316,10 +320,10 @@ class PathoLightning(pl.LightningModule):
             normalize = lambda x: x
         # these are the "Comparison of Deep Learning Approaches... transformations
         train_transforms = transforms.Compose([
-                transforms.RandomRotation(180),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomVerticalFlip(),
-                transforms.ColorJitter(hue=0.5),
+                #transforms.RandomRotation(180),
+                #transforms.RandomHorizontalFlip(),
+                #transforms.RandomVerticalFlip(),
+                #transforms.ColorJitter(hue=0.5),
                 #transforms.ToTensor(),
                 normalize,
             ])
@@ -425,10 +429,16 @@ class PathoLightning(pl.LightningModule):
             # NOTE: weight decay potentially harmful; typically requires larger lrs
             optimizer = SAM(params, base_optimizer, lr=self.lr, momentum=0.9, rho=0.05, adaptive=True)#weight_decay=self.hparams.weight_decay
         else:
-            optimizer = opt(params, self.lr, weight_decay=self.hparams.weight_decay)
+            if self.hparams.optimizer == "sgd":
+                optimizer = opt(params, self.lr, weight_decay=self.hparams.weight_decay, momentum=0.9)
+            else:
+                optimizer = opt(params, self.lr, weight_decay=self.hparams.weight_decay)
 
         if(self.hparams.lr_schedule=="const"):
-            scheduler = get_constant_schedule(optimizer)
+            n_schedule_epochs = 4
+            scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1/n_schedule_epochs, end_factor=1.0,
+                                                          total_iters=n_schedule_epochs)
+            #scheduler = get_constant_schedule(optimizer)
         elif(self.hparams.lr_schedule=="warmup-const"):
             scheduler = get_constant_schedule_with_warmup(optimizer,self.hparams.lr_num_warmup_steps)
         elif(self.hparams.lr_schedule=="warmup-cos"):
@@ -471,20 +481,22 @@ class PathoLightning(pl.LightningModule):
 
 def resnet_arch(hparams):
     resnet_constructors = {
-        'resnet18': rap_resnet.resnet18,   #torchvision.models.resnet18,#
-        'resnet34': rap_resnet.resnet34,   #torchvision.models.resnet34,#
-        'resnet50': rap_resnet.resnet50,   #torchvision.models.resnet50,#
-        'resnet101': rap_resnet.resnet101, #torchvision.models.resnet101,#
-        'resnet152': rap_resnet.resnet152, #torchvision.models.resnet152,#
+        #'resnet18': rap_resnet.resnet18,   #torchvision.models.resnet18,#
+        #'resnet34': rap_resnet.resnet34,   #torchvision.models.resnet34,#
+        'resnet50': timm_models2.resnetv2.resnetv2_50x1_bitm_in21k, #rap_resnet.resnet50,   #torchvision.models.resnet50,#
+        #'resnet101': rap_resnet.resnet101, #torchvision.models.resnet101,#
+        #'resnet152': timm_models.resnetv2.resnetv2_152, #torchvision.models.resnet152,#
+        'resnet152x2': timm_models2.resnetv2.resnetv2_152x2_bitm_in21k, #torchvision.models.resnet152,#
+        #'resnet152x4': timm_models.resnetv2.resnetv2_152x4_bitm_in21k, #torchvision.models.resnet152,#
     }
-    resnet = resnet_constructors[hparams.arch](num_classes=hparams.num_classes)
-    if isinstance(hparams.lin_ftrs_head, str):
-        hparams.lin_ftrs_head = eval(hparams.lin_ftrs_head)
-    if not hparams.no_concat_pooling:
-        resnet.avgpool = rap_layers.AdaptiveConcatPool2d()
-    resnet.fc = rap_create_head1d(2048, hparams.num_classes, lin_ftrs=hparams.lin_ftrs_head,
-                                 ps=hparams.dropout_head, concat_pooling=not hparams.no_concat_pooling,
-                                 bn=not hparams.no_bn_head)
+    resnet = resnet_constructors[hparams.arch](num_classes=hparams.num_classes, pretrained=hparams.use_pt_weights)
+    # if isinstance(hparams.lin_ftrs_head, str):
+    #     hparams.lin_ftrs_head = eval(hparams.lin_ftrs_head)
+    # if not hparams.no_concat_pooling:
+    #     resnet.avgpool = rap_layers.AdaptiveConcatPool2d()
+    # resnet.fc = rap_create_head1d(2048, hparams.num_classes, lin_ftrs=hparams.lin_ftrs_head,
+    #                              ps=hparams.dropout_head, concat_pooling=not hparams.no_concat_pooling,
+    #                              bn=not hparams.no_bn_head)
     model = PathoLightning(hparams, resnet)
     return model
 
@@ -580,6 +592,7 @@ def add_default_args():
 
     parser.add_argument('--pretrained', default='', type=str, metavar='PATH',
                     help='path to pretrained checkpoint (default: none)')
+    parser.add_argument('--use-pt-weights', action='store_true')
     parser.add_argument('--optimizer', default='adam', help='sgd/adam/sam')
     parser.add_argument('--output-path', default='.', type=str,dest="output_path",
                         help='output path')
@@ -647,16 +660,111 @@ def transformer_input_size_sanity(hparams):
 
 
 def construct_model(hparams, **kwargs):
-    if hparams.arch in [f'resnet{n}' for n in [18, 34, 50, 101, 152]]:
+    if hparams.arch in [f'resnet{n}' for n in [18, 34, 50, 101, 152, '152x2', '152x4']]:
         model = resnet_arch(hparams)
-    elif hparams.arch == 'vit':
+    elif hparams.arch in ['vit', 'vit-B']:
         model = PathoLightning(
-            hparams, 
-            vit.VisionTransformer(
-                img_size=hparams.input_size, patch_size=hparams.patch_size, in_chans=3, num_classes=hparams.num_classes,
-                embed_dim=hparams.dim_model, depth=hparams.n_layers, num_heads=hparams.n_heads, 
-                mlp_ratio=hparams.mlp_ratio, drop_rate=hparams.dropout, attn_drop_rate=hparams.dropout_attention
-            )
+            hparams,
+            timm_models.vit_base_patch16_224_in21k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+        #model = PathoLightning(
+        #    hparams, 
+        #    vit.VisionTransformer(
+        #        img_size=hparams.input_size, patch_size=hparams.patch_size, in_chans=3, num_classes=hparams.num_classes,
+        #        embed_dim=hparams.dim_model, depth=hparams.n_layers, num_heads=hparams.n_heads, 
+        #        mlp_ratio=hparams.mlp_ratio, drop_rate=hparams.dropout, attn_drop_rate=hparams.dropout_attention
+        #    )
+        #)
+    elif hparams.arch == 'vit-S':
+        model = PathoLightning(
+            hparams,
+            timm_models.vit_small_patch16_224_in21k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'vit-L':
+        model = PathoLightning(
+            hparams,
+            timm_models2.vit_large_patch16_224_in21k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'vit-T':
+        model = PathoLightning(
+            hparams,
+            timm_models2.vit_tiny_patch16_224_in21k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'vit-H':
+        model = PathoLightning(
+            hparams,
+            timm_models.vit_huge_patch14_224_in21k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'swin-T':
+        model = PathoLightning(
+            hparams,
+            timm_models.swin_tiny_patch4_window7_224(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'swin-B':
+        model = PathoLightning(
+            hparams,
+            timm_models.swin_base_patch4_window7_224_in22k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'swin-L':
+        model = PathoLightning(
+            hparams,
+            timm_models.swin_large_patch4_window7_224_in22k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'swin-S':
+        model = PathoLightning(
+            hparams,
+            timm_models.swin_small_patch4_window7_224(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'convnext-T':
+        model = PathoLightning(
+            hparams,
+            timm_models2.convnext_tiny_in22k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes, 
+                                             drop_rate=0.1, drop_path_rate=0.5)
+        )
+    elif hparams.arch == 'convnext-S':
+        model = PathoLightning(
+            hparams,
+            timm_models.convnext_small_in22k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'convnext-B':
+        model = PathoLightning(
+            hparams,
+            timm_models.convnext_base_in22k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'convnext-L':
+        model = PathoLightning(
+            hparams,
+            timm_models2.convnext_large_in22k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'convnext-XL':
+        model = PathoLightning(
+            hparams,
+            timm_models.convnext_xlarge_in22k(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes)
+        )
+    elif hparams.arch == 'ViTCnXt-T':
+        model = PathoLightning(
+            hparams,
+            hybrid.ViTT_ConvNeXtT(hparams)
+        )
+    elif hparams.arch == 'ViTCnXt-L':
+        model = PathoLightning(
+            hparams,
+            hybrid.ViTL_ConvNeXtL(hparams)
+        )
+    elif hparams.arch == 'SwinCnXt-T':
+        model = PathoLightning(
+            hparams,
+            hybrid.SwinT_ConvNeXtT(hparams)
+        )
+    elif hparams.arch == 'SwinCnXt-L':
+        model = PathoLightning(
+            hparams,
+            hybrid.SwinL_ConvNeXtL(hparams)
+        )
+    elif hparams.arch == 'IV3CnXt-T':
+        model = PathoLightning(
+            hparams,
+            hybrid.ConvNeXtT_InceptionV3(hparams)
         )
     elif hparams.arch == 'vit_C':
         model = PathoLightning(hparams, vit.VisionTransformerConvStem(hparams, **kwargs))
@@ -670,9 +778,9 @@ def construct_model(hparams, **kwargs):
         model = PathoLightning(hparams, gashis.ViTCInceptionV3(hparams, **kwargs))
     elif hparams.arch == 'botnet50':
         print(f'siz_in={PathoLightning.image_size(hparams)[0]}')
-        model = PathoLightning(hparams, gashis.BotNet50(n_classes=hparams.num_classes, size_in=PathoLightning.image_size(hparams)[0]))
+        model = PathoLightning(hparams, gashis.BotNet50(n_classes=hparams.num_classes, size_in=PathoLightning.image_size(hparams)[0], pretrained=hparams.use_pt_weights))
     elif hparams.arch == 'inception_v3':
-        model = PathoLightning(hparams, gashis.Inception(n_classes=hparams.num_classes))
+        model = PathoLightning(hparams, timm_models2.inception_v3(pretrained=hparams.use_pt_weights, num_classes=hparams.num_classes))#gashis.Inception(n_classes=hparams.num_classes))
     elif hparams.arch.startswith('vgg'):
         model = vgg_arch(hparams)
     else:

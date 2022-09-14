@@ -68,7 +68,7 @@ class LightningSegmentation(pl.LightningModule):
         self.train_dataset = train
         self.val_dataset = val if val is not None else test
         self.test_dataset = test
-        self.hparams = hparams
+        self.hparams.update(vars(hparams))
         self.criterion = CrossEntropyLoss()
 
     def forward(self, x_in):

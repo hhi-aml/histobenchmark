@@ -16,7 +16,7 @@ def collect_scores(model, dloader, cuda=True):
         model = model.cuda()
     model = model.eval()
     with torch.no_grad():
-        scores = torch.zeros([len(dloader.dataset), len(dloader.dataset.labels)])
+        scores = torch.zeros([len(dloader.dataset), 2])#len(dloader.dataset.labels)])
         targets = torch.zeros(len(dloader.dataset), dtype=int)
         i = 0
         for x, y in tqdm(dloader, total=len(dloader)):
@@ -68,8 +68,9 @@ if __name__ == '__main__':
 
     # bootstrap results
     def F_acc(Y_hat, Y): return F_metrics.accuracy(torch.argmax(Y_hat, dim=1), Y)
-    def F_auroc(Y_hat, Y): return F_metrics.auroc(torch.softmax(Y_hat, dim=1), Y, num_classes=hparams.num_classes, average='macro')
+    def F_auroc(Y_hat, Y): return F_metrics.auroc(torch.softmax(Y_hat, dim=1), Y, num_classes=2, average='macro')
     input_tuple = tuple(map(torch.from_numpy, [test_scores, test_targets]))
+    print(test_scores.shape, set(test_targets))
     metrices_dict = {
         'accuracy': F_acc,
         'ROC': F_auroc
