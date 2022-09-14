@@ -43,6 +43,8 @@ arXiv:2204.05044
 
 ## Quantitative Evaluation
 
+<p align="center"><img src="imgs/GFLROPS_Acc.png" width="500"></p>
+
 ### Training a Model
 
 The `main_patho_lightning.py` script handles the training of all models.
@@ -72,8 +74,8 @@ python3 main_score_stats.py /path/to/score_output_ResNet50 --pth_model_logs_B=/p
 
 ## Interpretability Evaluation
 
-<img src="imgs/LRP_models.png" height="400">
-<img src="imgs/ATTN_heads.png" height="400">
+<p align="center"><img src="imgs/LRP_models.png" height="500"></p>
+<p align="center"><img src="imgs/ATTN_heads.png" height="500"></p>
 
 We provide code for both LRP and attention evaluation based on a segmentation of nuclei, tissue and background areas.
 Exemplary results are displayed above.
@@ -107,7 +109,7 @@ You can evaluate the attention maps by setting `--xai-method=Attention`.
 
 ## Robustness Evaluation
 
-<img src="imgs/EVAL_robust.png" width="400">
+<p align="center"><img src="imgs/EVAL_robust.png" width="500"></p>
 
 The robustness evaluation procedure can be summarized as the disentanglement of the effect of cross-stain/cross-distribution and cross-stain/in-distribution on performance.
 A visualization of the procedure is displayed above.
