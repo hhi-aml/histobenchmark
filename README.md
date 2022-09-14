@@ -111,7 +111,7 @@ You can evaluate the attention maps by setting `--xai-method=Attention`.
 
 <p align="center"><img src="imgs/EVAL_robust.png" width="500"></p>
 
-The robustness evaluation procedure can be summarized as the disentanglement of the effect of cross-stain/cross-distribution and cross-stain/in-distribution on performance.
+The robustness evaluation procedure can be summarized as the disentanglement of the effect of color and distribution biases on performance.
 A visualization of the procedure is displayed above.
 
 ### Training a Cycle GAN
@@ -167,6 +167,15 @@ When using this code, please cite:
     month     = {June},
     year      = {2021},
     pages     = {782-791}
+}
+@misc{rw2019timm,
+  author = {Ross Wightman},
+  title = {PyTorch Image Models},
+  year = {2019},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  doi = {10.5281/zenodo.4414861},
+  howpublished = {\url{https://github.com/rwightman/pytorch-image-models}}
 }
 ```
 
