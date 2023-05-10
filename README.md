@@ -1,29 +1,23 @@
 # From CNNs to Vision Transformers – A  Comprehensive Evaluation of Deep Learning  Models for Histopathology
 
-While machine learning is currently transforming
-the field of histopathology, the domain lacks a comprehensive
-evaluation of state-of-the-art models based on essential but
-complementary quality requirements beyond a mere classification
-accuracy. In order to fill this gap, we conducted an extensive
-evaluation by benchmarking a wide range of classification models, including recent vision transformers, convolutional neural
-networks and hybrid models comprising transformer and convolutional models. We thoroughly tested the models on five widely
-used histopathology datasets containing whole slide images of
-breast, gastric, and colorectal cancer and developed a novel
-approach using an image-to-image translation model to assess
-the robustness of a cancer classification model against stain
-variations. Further, we extended existing interpretability methods
-to previously unstudied models and systematically reveal insights
-of the models’ classification strategies that allow for plausibility checks and systematic comparisons. The study resulted
-in specific model recommendations for practitioners as well as
-putting forward a general methodology to quantify a model’s
-quality according to complementary requirements that can be
-transferred to future model architectures.
+While machine learning is currently transforming the field of histopathology, the domain lacks a comprehensive evaluation of state-of-the-art models based on essential but complementary quality requirements beyond a mere classification accuracy. In order to fill this gap, we developed a new methodology to extensively evaluate a wide range of classification models, including recent vision transformers, and convolutional neural networks such as: ConvNeXt, ResNet (BiT), Inception, ViT and Swin transformer, with and without supervised or self-supervised pretraining. We thoroughly tested the models on five widely used histopathology datasets containing whole slide images of breast, gastric, and colorectal cancer and developed a novel approach using an image-to-image translation model to assess the robustness of a cancer classification model against stain variations. Further, we extended existing interpretability methods to previously unstudied models and systematically reveal insights of the models’ classification strategies that allow for plausibility checks and systematic comparisons. The study resulted in specific model recommendations for practitioners as well as putting forward a general methodology to quantify a model’s quality according to complementary requirements that can be transferred to future model architectures.
 
 
-Our paper can be found [here](https://arxiv.org/abs/2204.05044). 
+
+Our paper can be found at [MEDIMA](https://www.sciencedirect.com/science/article/abs/pii/S1361841523000701) and on [arXiv](https://arxiv.org/abs/2204.05044). 
 Please cite our work, when using this code:
 ```
-arXiv:2204.05044
+@article{SPRINGENBERG2023102809,
+    title = {From modern CNNs to vision transformers: Assessing the performance, robustness, and classification strategies of deep learning models in histopathology},
+    journal = {Medical Image Analysis},
+    pages = {102809},
+    year = {2023},
+    issn = {1361-8415},
+    doi = {https://doi.org/10.1016/j.media.2023.102809},
+    url = {https://www.sciencedirect.com/science/article/pii/S1361841523000701},
+    author = {Maximilian Springenberg and Annika Frommholz and Markus Wenzel and Eva Weicken and Jackie Ma and Nils Strodthoff},
+    keywords = {Interpretability, Histopathology, Machine learning, Robustness}
+}
 ```
 
 # Table of Contents
